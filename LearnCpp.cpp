@@ -241,14 +241,14 @@ int main()
     for (int i = 0; i <= numberOfImports; i++) {
         if (i % 100 == 0) {
             fill_all_option_chain_quotes(quotes, rowsCount - 1, file);
-            std::cout << "Importing file #" << (i + 1) << "\n";
+            printf("Importing file #%d\n", i + 1);
         }
     }
 
     clock_t end = clock();
     double elapsed_seconds = (double)(end - start) / CLOCKS_PER_SEC;
 
-    std::cout << "Memory allocated for " << rowsCount << " OptionChainQuote structures.\n";
+    printf("Memory allocated for %d OptionChainQuote structures.\n", rowsCount);
 
     // Afficher les 3 premières lignes
     //print_option_chain_quote(quotes, 746);
