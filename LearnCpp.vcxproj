@@ -123,7 +123,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="black_pricer.cpp" />
+    <ClCompile Include="black_pricer.h" />
     <ClCompile Include="LearnCpp.cpp" />
+    <ClCompile Include="option_data.cpp" />
+    <ClCompile Include="regression.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="regression.h" />
+    <ClInclude Include="option_data.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

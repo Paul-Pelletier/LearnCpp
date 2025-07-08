@@ -1,365 +1,192 @@
-// LearnCpp.cpp : Ce fichier contient la fonction 'main'. L'exécution du programme commence et se termine à cet endroit.
-//
-
 #define _CRT_SECURE_NO_WARNINGS
-#include <iostream>
+#include <stdio.h>
 #include <stdlib.h>
-#include <string>
 #include <stdint.h>
 #include <time.h>
-#include <vector>
-#include <map>
-#include <utility> // for std::pair
-#include <algorithm>
 #include <windows.h>
+#include <math.h>
 
+#include "option_data.h"
+#include "regression.h"
+#include "black_pricer.h"
 
-struct OptionChainQuote {
-    int64_t quote_unixtime;
-    char quote_readtime[20];     // "YYYY-MM-DD HH:MM"
-    char quote_date[12];         // "YYYY-MM-DD"
-    double quote_time_hours;
-    double underlying_last;
-    char expire_date[12];
-    int64_t expire_unixtime;
-    double dte;
-    double c_delta;
-    double c_gamma;
-    double c_vega;
-    double c_theta;
-    double c_rho;
-    double c_iv;
-    int c_volume;
-    double c_last;
-    char c_size[16];             // e.g., "25 x 25"
-    double c_bid;
-    double c_ask;
-    double strike;
-    double p_bid;
-    double p_ask;
-    char p_size[16];
-    double p_last;
-    double p_delta;
-    double p_gamma;
-    double p_vega;
-    double p_theta;
-    double p_rho;
-    double p_iv;
-    int p_volume;
-    double strike_distance;
-    double strike_distance_pct;
-    double call_put_parity_criterion;   // Attention: changé en double
-    double c_mid;
-    double p_mid;
-    double c_bidaskspread;
-    double p_bidaskspread;
-    double yte;
-    double calc;
-    int volume;
-    double forward;
-    double log_moneyness;
-    double fwd_pct;
-    double log_money_fwd_pct;
-};
-struct LinearRegressionStats {
-    double intercept;
-    double slope;
-    double r_squared;
-    double mse;   // Mean Squared Error
-    double rmse;  // Root Mean Squared Error
-};
-struct ForwardRegressionResult {
-    std::vector<int64_t> expiries;
-    std::vector<LinearRegressionStats> regressions;
-};
-
-const char* field_names[] = {
-    "quote_unixtime",
-    "quote_readtime",
-    "quote_date",
-    "quote_time_hours",
-    "underlying_last",
-    "expire_date",
-    "expire_unixtime",
-    "dte",
-    "c_delta",
-    "c_gamma",
-    "c_vega",
-    "c_theta",
-    "c_rho",
-    "c_iv",
-    "c_volume",
-    "c_last",
-    "c_size",
-    "c_bid",
-    "c_ask",
-    "strike",
-    "p_bid",
-    "p_ask",
-    "p_size",
-    "p_last",
-    "p_delta",
-    "p_gamma",
-    "p_vega",
-    "p_theta",
-    "p_rho",
-    "p_iv",
-    "p_volume",
-    "strike_distance",
-    "strike_distance_pct",
-    "call_put_parity_criterion",
-    "c_mid",
-    "p_mid",
-    "c_bidaskspread",
-    "p_bidaskspread",
-    "yte",
-    "calc",
-    "volume",
-    "forward",
-    "log_moneyness",
-    "fwd_pct",
-    "log_money_fwd_pct"
-};
-
-int get_csv_rows_count(FILE* file) {
-    rewind(file);
-    int result = 0;
-    int c = 0;
-    while ((c = fgetc(file)) != EOF) {
-        if (c == '\n') {
-            result++;
-        }
-    }
-    rewind(file);
-    return result;
-}
-
-double parse_double(const char* s) {
-    char tmp[64];
-    strncpy(tmp, s, sizeof(tmp));
-    tmp[sizeof(tmp) - 1] = '\0';
-    for (char* p = tmp; *p; ++p) {
-        if (*p == ',') *p = '.';
-    }
-    return atof(tmp);
-}
-
-void fill_all_option_chain_quotes(struct OptionChainQuote* quotes, int rowsToFill, FILE* file) {
-    rewind(file);
-    char buffer[10000];
-
-    // Skip header
-    fgets(buffer, sizeof(buffer), file);
-
-    int rowCounter = 0;
-
-    while (fgets(buffer, sizeof(buffer), file) != NULL && rowCounter < rowsToFill) {
-        buffer[strcspn(buffer, "\r\n")] = 0;
-
-        char* token = strtok(buffer, ";");
-        int field = 0;
-
-        while (token != NULL) {
-            switch (field) {
-            case 0: quotes[rowCounter].quote_unixtime = strtoll(token, NULL, 10); break;
-            case 1: strncpy(quotes[rowCounter].quote_readtime, token, sizeof(quotes[rowCounter].quote_readtime));
-                quotes[rowCounter].quote_readtime[sizeof(quotes[rowCounter].quote_readtime) - 1] = '\0'; break;
-            case 2: strncpy(quotes[rowCounter].quote_date, token, sizeof(quotes[rowCounter].quote_date));
-                quotes[rowCounter].quote_date[sizeof(quotes[rowCounter].quote_date) - 1] = '\0'; break;
-            case 3: quotes[rowCounter].quote_time_hours = parse_double(token); break;
-            case 4: quotes[rowCounter].underlying_last = parse_double(token); break;
-            case 5: strncpy(quotes[rowCounter].expire_date, token, sizeof(quotes[rowCounter].expire_date));
-                quotes[rowCounter].expire_date[sizeof(quotes[rowCounter].expire_date) - 1] = '\0'; break;
-            case 6: quotes[rowCounter].expire_unixtime = strtoll(token, NULL, 10); break;
-            case 7: quotes[rowCounter].dte = parse_double(token); break;
-            case 8: quotes[rowCounter].c_delta = parse_double(token); break;
-            case 9: quotes[rowCounter].c_gamma = parse_double(token); break;
-            case 10: quotes[rowCounter].c_vega = parse_double(token); break;
-            case 11: quotes[rowCounter].c_theta = parse_double(token); break;
-            case 12: quotes[rowCounter].c_rho = parse_double(token); break;
-            case 13: quotes[rowCounter].c_iv = parse_double(token); break;
-            case 14: quotes[rowCounter].c_volume = atoi(token); break;
-            case 15: quotes[rowCounter].c_last = parse_double(token); break;
-            case 16: strncpy(quotes[rowCounter].c_size, token, sizeof(quotes[rowCounter].c_size));
-                quotes[rowCounter].c_size[sizeof(quotes[rowCounter].c_size) - 1] = '\0'; break;
-            case 17: quotes[rowCounter].c_bid = parse_double(token); break;
-            case 18: quotes[rowCounter].c_ask = parse_double(token); break;
-            case 19: quotes[rowCounter].strike = parse_double(token); break;
-            case 20: quotes[rowCounter].p_bid = parse_double(token); break;
-            case 21: quotes[rowCounter].p_ask = parse_double(token); break;
-            case 22: strncpy(quotes[rowCounter].p_size, token, sizeof(quotes[rowCounter].p_size));
-                quotes[rowCounter].p_size[sizeof(quotes[rowCounter].p_size) - 1] = '\0'; break;
-            case 23: quotes[rowCounter].p_last = parse_double(token); break;
-            case 24: quotes[rowCounter].p_delta = parse_double(token); break;
-            case 25: quotes[rowCounter].p_gamma = parse_double(token); break;
-            case 26: quotes[rowCounter].p_vega = parse_double(token); break;
-            case 27: quotes[rowCounter].p_theta = parse_double(token); break;
-            case 28: quotes[rowCounter].p_rho = parse_double(token); break;
-            case 29: quotes[rowCounter].p_iv = parse_double(token); break;
-            case 30: quotes[rowCounter].p_volume = atoi(token); break;
-            case 31: quotes[rowCounter].strike_distance = parse_double(token); break;
-            case 32: quotes[rowCounter].strike_distance_pct = parse_double(token); break;
-            case 33: quotes[rowCounter].call_put_parity_criterion = parse_double(token); break;
-            case 34: quotes[rowCounter].c_mid = parse_double(token); break;
-            case 35: quotes[rowCounter].p_mid = parse_double(token); break;
-            case 36: quotes[rowCounter].c_bidaskspread = parse_double(token); break;
-            case 37: quotes[rowCounter].p_bidaskspread = parse_double(token); break;
-            case 38: quotes[rowCounter].yte = parse_double(token); break;
-            case 39: quotes[rowCounter].calc = parse_double(token); break;
-            case 40: quotes[rowCounter].volume = atoi(token); break;
-            case 41: quotes[rowCounter].forward = parse_double(token); break;
-            case 42: quotes[rowCounter].log_moneyness = parse_double(token); break;
-            case 43: quotes[rowCounter].fwd_pct = parse_double(token); break;
-            case 44: quotes[rowCounter].log_money_fwd_pct = parse_double(token); break;
-            default: break;
-            }
-            field++;
-            token = strtok(NULL, ";");
-        }
-
-        if (field < 45) {
-            printf("Warning: line %d has only %d fields\n", rowCounter, field);
-        }
-
-        rowCounter++;
-    }
-	rewind(file);
-}
-
-void print_fields_of_option_chain_quote(struct OptionChainQuote* quote) {
-    std::cout << "quote_unixtime: " << quote->quote_unixtime << "\n";
-    std::cout << "quote_readtime: " << quote->quote_readtime << "\n";
-    std::cout << "quote_date: " << quote->quote_date << "\n";
-    std::cout << "quote_time_hours: " << quote->quote_time_hours << "\n";
-    std::cout << "underlying_last: " << quote->underlying_last << "\n";
-    // Tu peux compléter ici si tu veux afficher tous les champs
-}
-
-void print_option_chain_quote(struct OptionChainQuote* quotes, int rowsToPrint) {
-    for (int i = 0; i < rowsToPrint; i++) {
-        std::cout << "Row " << i + 1 << ":\n";
-        print_fields_of_option_chain_quote(&quotes[i]);
-        std::cout << "\n";
-    }
-}
-
-LinearRegressionStats linear_regression(const std::vector<double>& x, const std::vector<double>& y) {
-    int n = x.size();
-    LinearRegressionStats stats = { 0.0, 0.0, 0.0, 0.0, 0.0 };
-    if (n == 0) return stats;
-
-    double sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
-    for (int i = 0; i < n; ++i) {
-        sum_x += x[i];
-        sum_y += y[i];
-        sum_xy += x[i] * y[i];
-        sum_x2 += x[i] * x[i];
-    }
-
-    double mean_x = sum_x / n;
-    double mean_y = sum_y / n;
-    double denominator = sum_x2 - n * mean_x * mean_x;
-
-    if (denominator == 0.0) {
-        stats.intercept = mean_y;
-        return stats;
-    }
-
-    stats.slope = (sum_xy - n * mean_x * mean_y) / denominator;
-    stats.intercept = mean_y - stats.slope * mean_x;
-
-    // Calcul des résidus et R²
-    double ss_total = 0.0, ss_residual = 0.0;
-    for (int i = 0; i < n; ++i) {
-        double y_hat = stats.intercept + stats.slope * x[i];
-        double error = y[i] - y_hat;
-        ss_residual += error * error;
-        ss_total += (y[i] - mean_y) * (y[i] - mean_y);
-    }
-
-    stats.mse = ss_residual / n;
-    stats.rmse = sqrt(stats.mse);
-    stats.r_squared = (ss_total == 0.0) ? 0.0 : 1.0 - (ss_residual / ss_total);
-
-    return stats;
-}
-
-
-ForwardRegressionResult compute_forward_regressions(const OptionChainQuote* quotes, int n) {
-    std::map<int64_t, std::vector<const OptionChainQuote*>> grouped;
-    ForwardRegressionResult result;
-
-    for (int i = 0; i < n; ++i) {
-        if (quotes[i].c_mid > 0 && quotes[i].p_mid > 0) {
-            grouped[quotes[i].expire_unixtime].push_back(&quotes[i]);
-        }
-    }
-
-    for (auto it = grouped.begin(); it != grouped.end(); ++it) {
-        int64_t expiry = it->first;
-        const std::vector<const OptionChainQuote*>& rows = it->second;
-
-        std::vector<double> x, y;
-        for (const auto* quote : rows) {
-            x.push_back(quote->strike);
-            y.push_back(quote->c_mid - quote->p_mid);
-        }
-
-        LinearRegressionStats stats = linear_regression(x, y);
-        result.expiries.push_back(expiry);
-        result.regressions.push_back(stats);
-    }
-
-    return result;
-}
-
-
-
-int main()
+int main(void)
 {
     SetConsoleOutputCP(CP_UTF8);
-    std::string path = "C:\\Users\\paula\\source\\repos\\LearnCpp\\raw_data.csv";
+
+    const double epsilon = 1e-8;
+    const char* path = "C:\\Users\\paula\\source\\repos\\LearnCpp\\raw_data.csv";
+
     clock_t start = clock();
-    FILE* file = fopen(path.c_str(), "r");
+
+    /* ------------------------------------------------------------------ */
+    /*  Lecture CSV                                                       */
+    /* ------------------------------------------------------------------ */
+    FILE* file = fopen(path, "r");
+    if (!file) { perror("Erreur d'ouverture du fichier"); return 1; }
+
     int rowsCount = get_csv_rows_count(file);
-    std::cout << "Rows count: " << rowsCount << "\n";
+    struct OptionChainQuote* quotes =
+        (struct OptionChainQuote*)malloc(rowsCount * sizeof(struct OptionChainQuote));
+    if (!quotes) { perror("Erreur alloc"); fclose(file); return 1; }
 
-    int numberOfImports = 1;
-    struct OptionChainQuote* quotes = new struct OptionChainQuote[rowsCount];
+    fill_all_option_chain_quotes(quotes, rowsCount - 1, file);
+    fclose(file);
 
-    for (int i = 0; i <= numberOfImports; i++) {
-        if (i % 100 == 0) {
-            fill_all_option_chain_quotes(quotes, rowsCount - 1, file);
-            printf("Importing file #%d\n", i + 1);
-        }
+    /* ------------------------------------------------------------------
+       Correctif : le fournisseur a inversé θ_call / θ_put dans le CSV   */
+    for (int k = 0; k < rowsCount; ++k) {
+        double tmp = quotes[k].c_theta;  /* lu comme call */
+        quotes[k].c_theta = quotes[k].p_theta; /* remet le vrai call  */
+        quotes[k].p_theta = tmp;              /* remet le vrai put   */
     }
-    
+    /* ------------------------------------------------------------------ */
 
+    struct ForwardRegressionResult regressionResult =
+        compute_forward_regressions(quotes, rowsCount);
 
-    printf("Memory allocated for %d OptionChainQuote structures.\n", rowsCount);
+    /* =======================  TABLE 1  =============================== */
+    printf("\n=== TABLE 1: Forward and Discount Factor per Expiry ===\n");
+    printf("%-15s | %-12s | %-10s | %-10s | %-10s | %-6s\n",
+        "Expiry", "Intercept", "Slope", "R^2", "RMSE", "Count");
+    printf("-------------------------------------------------------------------------------\n");
+    for (size_t i = 0; i < regressionResult.count; ++i)
+        printf("%-15lld | %-12.2f | %-10.6f | %-10.6f | %-10.6f | %-6d\n",
+            regressionResult.expiries[i],
+            regressionResult.regressions[i].intercept,
+            regressionResult.regressions[i].slope,
+            regressionResult.regressions[i].r_squared,
+            regressionResult.regressions[i].rmse,
+            regressionResult.regressions[i].count);
 
+    /* =======================  TABLE 2  =============================== */
+    printf("\n=== TABLE 2: Pricing Errors ===\n");
+    printf("%-15s | %-15s | %-8s | %-10s | %-10s | %-9s | %-10s | %-10s | %-9s\n",
+        "QuoteTime", "Expiry", "Strike",
+        "Call_Mid", "Call_Theo", "Call_Err",
+        "Put_Mid", "Put_Theo", "Put_Err");
+    printf("----------------------------------------------------------------------------------------------\n");
 
-	fclose(file);
-    ForwardRegressionResult regressionResult = compute_forward_regressions(quotes, rowsCount);
+    for (int i = 0; i < rowsCount; ++i) {
+        struct OptionChainQuote* q = &quotes[i];
+        if (q->c_iv <= 0.0 || q->p_iv <= 0.0 || q->dte <= 0.0) continue;
 
-    // En-tête du tableau
-    printf("%-15s | %-12s | %-10s | %-10s | %-10s\n",
-        "Expiry", "Intercept", "Slope", "R^2", "RMSE");
-    printf("---------------------------------------------------------------\n");
+        struct LinearRegressionStats* stats = NULL;
+        for (size_t j = 0; j < regressionResult.count; ++j)
+            if (regressionResult.expiries[j] == q->expire_unixtime) { stats = &regressionResult.regressions[j]; break; }
+        if (!stats) continue;
 
-    // Affichage ligne par ligne
-    for (size_t i = 0; i < regressionResult.expiries.size(); ++i) {
-        int64_t expiry = regressionResult.expiries[i];
-        struct LinearRegressionStats stats = regressionResult.regressions[i];
+        double stddev_c = q->c_iv * sqrt(stats->maturity);
+        double stddev_p = q->p_iv * sqrt(stats->maturity);
 
-        printf("%-15lld | %-12.2f | %-10.6f | %-10.6f | %-10.6f\n",
-            expiry, stats.intercept, stats.slope, stats.r_squared, stats.rmse);
+        double call_theo = black_scholes_price(stats->forward, q->strike, stddev_c,
+            stats->discount_factor, 1);
+        double put_theo = black_scholes_price(stats->forward, q->strike, stddev_p,
+            stats->discount_factor, 0);
+
+        double call_err = fabs(call_theo - q->c_mid);
+        double put_err = fabs(put_theo - q->p_mid);
+
+        if ((q->c_mid > 0.0 && call_err < 10.0) || (q->p_mid > 0.0 && put_err < 10.0))
+            printf("%-15lld | %-15lld | %-8.2f | %-10.4f | %-10.4f | %-9.4f | %-10.4f | %-10.4f | %-9.4f\n",
+                q->quote_unixtime, q->expire_unixtime, q->strike,
+                q->c_mid, call_theo, call_err,
+                q->p_mid, put_theo, put_err);
     }
 
+    /* =======================  TABLE 3  =============================== */
+    printf("\n=== TABLE 3: Greeks ===\n");
+    printf("%-15s | %-15s | %-8s | %-8s | %-8s | %-8s | %-10s | %-10s | %-10s\n",
+        "QuoteTime", "Expiry", "Strike",
+        "Δ_Call", "Δ_Put", "Γ", "Vega", "Θ_Call", "Θ_Put");
+    printf("----------------------------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < rowsCount; ++i) {
+        struct OptionChainQuote* q = &quotes[i];
+
+        struct LinearRegressionStats* stats = NULL;
+        for (size_t j = 0; j < regressionResult.count; ++j)
+            if (regressionResult.expiries[j] == q->expire_unixtime) { stats = &regressionResult.regressions[j]; break; }
+        if (!stats || q->dte <= 0.0) continue;
+
+        double stddev_c = fmax(epsilon, q->c_iv * sqrt(stats->maturity));
+        double stddev_p = fmax(epsilon, q->p_iv * sqrt(stats->maturity));
+
+        double delta_c = black_scholes_delta(stats->forward, q->strike, stddev_c,
+            stats->discount_factor, 1);
+        double delta_p = black_scholes_delta(stats->forward, q->strike, stddev_p,
+            stats->discount_factor, 0);
+        double gamma = black_scholes_gamma(stats->forward, q->strike, stddev_c,
+            stats->discount_factor);
+        double vega = black_scholes_vega(stats->forward, q->strike, stddev_c,
+            stats->discount_factor, stats->maturity);
+        double theta_c = black_scholes_theta(stats->forward, q->strike, q->c_iv,
+            stats->discount_factor, stats->maturity, 1);
+        double theta_p = black_scholes_theta(stats->forward, q->strike, q->p_iv,
+            stats->discount_factor, stats->maturity, 0);
+
+        printf("%-15lld | %-15lld | %-8.2f | %-8.4f | %-8.4f | %-8.6f | %-10.4f | %-10.2f | %-10.2f\n",
+            q->quote_unixtime, q->expire_unixtime, q->strike,
+            delta_c, delta_p, gamma, vega, theta_c, theta_p);
+    }
+
+    /* =======================  TABLE 4  =============================== */
+    printf("\n=== TABLE 4: Theo vs CSV Greeks ===\n");
+    printf("%-15s | %-15s | %-8s | %-10s | %-10s | %-6s | %-10s | %-10s | %-10s | %-10s\n",
+        "QuoteTime", "Expiry", "Strike",
+        "Fwd", "ln(K/F)", "Greek",
+        "Theo_Call", "CSV_Call", "Theo_Put", "CSV_Put");
+    printf("-----------------------------------------------------------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < rowsCount; ++i) {
+        struct OptionChainQuote* q = &quotes[i];
+        if (q->dte <= 0.0) continue;
+
+        struct LinearRegressionStats* stats = NULL;
+        for (size_t j = 0; j < regressionResult.count; ++j)
+            if (regressionResult.expiries[j] == q->expire_unixtime) { stats = &regressionResult.regressions[j]; break; }
+        if (!stats) continue;
+
+        double ln_kf = log(q->strike / stats->forward);
+        double vol_c = fmax(epsilon, q->c_iv * sqrt(stats->maturity));
+        double vol_p = fmax(epsilon, q->p_iv * sqrt(stats->maturity));
+
+        double delta_c = black_scholes_delta(stats->forward, q->strike, vol_c, stats->discount_factor, 1);
+        double delta_p = black_scholes_delta(stats->forward, q->strike, vol_p, stats->discount_factor, 0);
+        double gamma = black_scholes_gamma(stats->forward, q->strike, vol_c, stats->discount_factor);
+        double vega = black_scholes_vega(stats->forward, q->strike, vol_c, stats->discount_factor, stats->maturity);
+        double theta_c = black_scholes_theta(stats->forward, q->strike, q->c_iv, stats->discount_factor, stats->maturity, 1);
+        double theta_p = black_scholes_theta(stats->forward, q->strike, q->p_iv, stats->discount_factor, stats->maturity, 0);
+
+        /* Delta */
+        printf("%-15lld | %-15lld | %-8.2f | %-10.4f | %-10.4f | %-6s | %-10.5f | %-10.5f | %-10.5f | %-10.5f\n",
+            q->quote_unixtime, q->expire_unixtime, q->strike,
+            stats->forward, ln_kf, "Delta",
+            delta_c, q->c_delta, delta_p, q->p_delta);
+        /* Gamma */
+        printf("%-15lld | %-15lld | %-8.2f | %-10.4f | %-10.4f | %-6s | %-10.8f | %-10.8f | %-10.8f | %-10.8f\n",
+            q->quote_unixtime, q->expire_unixtime, q->strike,
+            stats->forward, ln_kf, "Gamma",
+            gamma, q->c_gamma, gamma, q->p_gamma);
+        /* Vega */
+        printf("%-15lld | %-15lld | %-8.2f | %-10.4f | %-10.4f | %-6s | %-10.2f | %-10.2f | %-10.2f | %-10.2f\n",
+            q->quote_unixtime, q->expire_unixtime, q->strike,
+            stats->forward, ln_kf, "Vega",
+            vega, q->c_vega, vega, q->p_vega);
+        /* Theta */
+        printf("%-15lld | %-15lld | %-8.2f | %-10.4f | %-10.4f | %-6s | %-10.8f | %-10.8f | %-10.8f | %-10.8f\n",
+            q->quote_unixtime, q->expire_unixtime, q->strike,
+            stats->forward, ln_kf, "Theta",
+            theta_c, q->c_theta, theta_p, q->p_theta);
+    }
+
+    /* ------------------------------------------------------------------ */
     clock_t end = clock();
-    double elapsed_seconds = (double)(end - start) / CLOCKS_PER_SEC;
-	printf("Total execution time: %.6f seconds\n", elapsed_seconds);
-	delete[] quotes;
-    std::cin.get();
+    printf("\nTotal execution time: %.6f seconds\n",
+        (double)(end - start) / CLOCKS_PER_SEC);
+
+    free(quotes);
+    free(regressionResult.expiries);
+    free(regressionResult.regressions);
     return 0;
 }
