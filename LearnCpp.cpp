@@ -23,7 +23,7 @@
 #include "black_pricer.h"
 
  /* ======= RÉGLAGE GLOBAL ======= */
-const bool  benchmark = true;   // <-- mets true pour le chrono seul
+const bool  benchmark = false;   // <-- mets true pour le chrono seul
 const char* CSV_PATH =
 R"(C:\Users\paula\source\repos\LearnCpp\raw_data.csv)";
 const double EPS = 1e-8;

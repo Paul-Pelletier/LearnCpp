@@ -1,95 +1,128 @@
-#define _CRT_SECURE_NO_WARNINGS
+/*************************************
+ * option_data.cpp   (C++20)
+ *  - parsing CSV ultra-rapide
+ *  - conversions via std::from_chars
+ *************************************/
+#define  _CRT_SECURE_NO_WARNINGS
 #include "option_data.h"
-#include <string.h>
-#include <stdlib.h>
 
-int get_csv_rows_count(FILE* file) {
-    rewind(file);
-    int result = 0;
-    int c = 0;
-    while ((c = fgetc(file)) != EOF) {
-        if (c == '\n') result++;
-    }
-    rewind(file);
-    return result;
+#include <charconv>      // std::from_chars
+#include <string.h>      // strlen, strncpy, strtok, strcspn
+#include <stdlib.h>      // FILE*, fgets, fgetc
+#include <array>
+#include <cerrno>        // std::errc
+
+ /* ---------- utilitaires ----------- */
+
+ // remplace atof et gère la virgule décimale
+static double fast_atof(const char* s)
+{
+    std::array<char, 64> buf{};
+    std::size_t i = 0;
+    for (; s[i] && i < buf.size() - 1; ++i)
+        buf[i] = (s[i] == ',') ? '.' : s[i];
+
+    double value = 0.0;
+    auto res = std::from_chars(buf.data(), buf.data() + i, value);
+    return (res.ec == std::errc()) ? value : 0.0;
 }
 
-double parse_double(const char* s) {
-    char tmp[64];
-    strncpy(tmp, s, sizeof(tmp));
-    tmp[sizeof(tmp) - 1] = '\0';
-    for (char* p = tmp; *p; ++p) {
-        if (*p == ',') *p = '.';
-    }
-    return atof(tmp);
+static inline int32_t fast_atoi(const char* s)
+{
+    int32_t v = 0;
+    std::from_chars(s, s + strlen(s), v);
+    return v;
 }
 
-void fill_all_option_chain_quotes(struct OptionChainQuote* quotes, int rowsToFill, FILE* file) {
+static inline int64_t fast_atoll(const char* s)
+{
+    int64_t v = 0;
+    std::from_chars(s, s + strlen(s), v);
+    return v;
+}
+
+/* ---------- fonctions exportées ----------- */
+
+int get_csv_rows_count(FILE* file)
+{
     rewind(file);
-    char buffer[10000];
-    fgets(buffer, sizeof(buffer), file); // Skip header
+    int rows = 0, c = 0;
+    while ((c = fgetc(file)) != EOF)
+        if (c == '\n') ++rows;
+    rewind(file);
+    return rows;
+}
 
-    int rowCounter = 0;
+void fill_all_option_chain_quotes(OptionChainQuote* q,
+    int rowsToFill,
+    FILE* file)
+{
+    rewind(file);
+    char buffer[10'000];
+    fgets(buffer, sizeof(buffer), file);           // saute l’en-tête
 
-    while (fgets(buffer, sizeof(buffer), file) != NULL && rowCounter < rowsToFill) {
-        buffer[strcspn(buffer, "\r\n")] = 0;
+    int row = 0;
+    while (row < rowsToFill && fgets(buffer, sizeof(buffer), file))
+    {
+        buffer[strcspn(buffer, "\r\n")] = '\0';
         char* token = strtok(buffer, ";");
         int field = 0;
 
-        while (token != NULL) {
-            switch (field) {
-            case 0: quotes[rowCounter].quote_unixtime = strtoll(token, NULL, 10); break;
-            case 1: strncpy(quotes[rowCounter].quote_readtime, token, sizeof(quotes[rowCounter].quote_readtime)); break;
-            case 2: strncpy(quotes[rowCounter].quote_date, token, sizeof(quotes[rowCounter].quote_date)); break;
-            case 3: quotes[rowCounter].quote_time_hours = parse_double(token); break;
-            case 4: quotes[rowCounter].underlying_last = parse_double(token); break;
-            case 5: strncpy(quotes[rowCounter].expire_date, token, sizeof(quotes[rowCounter].expire_date)); break;
-            case 6: quotes[rowCounter].expire_unixtime = strtoll(token, NULL, 10); break;
-            case 7: quotes[rowCounter].dte = parse_double(token); break;
-            case 8: quotes[rowCounter].c_delta = parse_double(token); break;
-            case 9: quotes[rowCounter].c_gamma = parse_double(token); break;
-            case 10: quotes[rowCounter].c_vega = parse_double(token); break;
-            case 11: quotes[rowCounter].c_theta = parse_double(token); break;
-            case 12: quotes[rowCounter].c_rho = parse_double(token); break;
-            case 13: quotes[rowCounter].c_iv = parse_double(token); break;
-            case 14: quotes[rowCounter].c_volume = atoi(token); break;
-            case 15: quotes[rowCounter].c_last = parse_double(token); break;
-            case 16: strncpy(quotes[rowCounter].c_size, token, sizeof(quotes[rowCounter].c_size)); break;
-            case 17: quotes[rowCounter].c_bid = parse_double(token); break;
-            case 18: quotes[rowCounter].c_ask = parse_double(token); break;
-            case 19: quotes[rowCounter].strike = parse_double(token); break;
-            case 20: quotes[rowCounter].p_bid = parse_double(token); break;
-            case 21: quotes[rowCounter].p_ask = parse_double(token); break;
-            case 22: strncpy(quotes[rowCounter].p_size, token, sizeof(quotes[rowCounter].p_size)); break;
-            case 23: quotes[rowCounter].p_last = parse_double(token); break;
-            case 24: quotes[rowCounter].p_delta = parse_double(token); break;
-            case 25: quotes[rowCounter].p_gamma = parse_double(token); break;
-            case 26: quotes[rowCounter].p_vega = parse_double(token); break;
-            case 27: quotes[rowCounter].p_theta = parse_double(token); break;
-            case 28: quotes[rowCounter].p_rho = parse_double(token); break;
-            case 29: quotes[rowCounter].p_iv = parse_double(token); break;
-            case 30: quotes[rowCounter].p_volume = atoi(token); break;
-            case 31: quotes[rowCounter].strike_distance = parse_double(token); break;
-            case 32: quotes[rowCounter].strike_distance_pct = parse_double(token); break;
-            case 33: quotes[rowCounter].call_put_parity_criterion = parse_double(token); break;
-            case 34: quotes[rowCounter].c_mid = parse_double(token); break;
-            case 35: quotes[rowCounter].p_mid = parse_double(token); break;
-            case 36: quotes[rowCounter].c_bidaskspread = parse_double(token); break;
-            case 37: quotes[rowCounter].p_bidaskspread = parse_double(token); break;
-            case 38: quotes[rowCounter].yte = parse_double(token); break;
-            case 39: quotes[rowCounter].calc = parse_double(token); break;
-            case 40: quotes[rowCounter].volume = atoi(token); break;
-            case 41: quotes[rowCounter].forward = parse_double(token); break;
-            case 42: quotes[rowCounter].log_moneyness = parse_double(token); break;
-            case 43: quotes[rowCounter].fwd_pct = parse_double(token); break;
-            case 44: quotes[rowCounter].log_money_fwd_pct = parse_double(token); break;
+        while (token)
+        {
+            switch (field)
+            {
+            case  0: q[row].quote_unixtime = fast_atoll(token); break;
+            case  1: strncpy(q[row].quote_readtime, token, sizeof q[row].quote_readtime);  break;
+            case  2: strncpy(q[row].quote_date, token, sizeof q[row].quote_date);      break;
+            case  3: q[row].quote_time_hours = fast_atof(token);  break;
+            case  4: q[row].underlying_last = fast_atof(token);  break;
+            case  5: strncpy(q[row].expire_date, token, sizeof q[row].expire_date);     break;
+            case  6: q[row].expire_unixtime = fast_atoll(token); break;
+            case  7: q[row].dte = fast_atof(token);  break;
+            case  8: q[row].c_delta = fast_atof(token);  break;
+            case  9: q[row].c_gamma = fast_atof(token);  break;
+            case 10: q[row].c_vega = fast_atof(token);  break;
+            case 11: q[row].c_theta = fast_atof(token);  break;
+            case 12: q[row].c_rho = fast_atof(token);  break;
+            case 13: q[row].c_iv = fast_atof(token);  break;
+            case 14: q[row].c_volume = fast_atoi(token);  break;
+            case 15: q[row].c_last = fast_atof(token);  break;
+            case 16: strncpy(q[row].c_size, token, sizeof q[row].c_size);          break;
+            case 17: q[row].c_bid = fast_atof(token);  break;
+            case 18: q[row].c_ask = fast_atof(token);  break;
+            case 19: q[row].strike = fast_atof(token);  break;
+            case 20: q[row].p_bid = fast_atof(token);  break;
+            case 21: q[row].p_ask = fast_atof(token);  break;
+            case 22: strncpy(q[row].p_size, token, sizeof q[row].p_size);          break;
+            case 23: q[row].p_last = fast_atof(token);  break;
+            case 24: q[row].p_delta = fast_atof(token);  break;
+            case 25: q[row].p_gamma = fast_atof(token);  break;
+            case 26: q[row].p_vega = fast_atof(token);  break;
+            case 27: q[row].p_theta = fast_atof(token);  break;
+            case 28: q[row].p_rho = fast_atof(token);  break;
+            case 29: q[row].p_iv = fast_atof(token);  break;
+            case 30: q[row].p_volume = fast_atoi(token);  break;
+            case 31: q[row].strike_distance = fast_atof(token);  break;
+            case 32: q[row].strike_distance_pct = fast_atof(token);  break;
+            case 33: q[row].call_put_parity_criterion = fast_atof(token);  break;
+            case 34: q[row].c_mid = fast_atof(token);  break;
+            case 35: q[row].p_mid = fast_atof(token);  break;
+            case 36: q[row].c_bidaskspread = fast_atof(token);  break;
+            case 37: q[row].p_bidaskspread = fast_atof(token);  break;
+            case 38: q[row].yte = fast_atof(token);  break;
+            case 39: q[row].calc = fast_atof(token);  break;
+            case 40: q[row].volume = fast_atoi(token);  break;
+            case 41: q[row].forward = fast_atof(token);  break;
+            case 42: q[row].log_moneyness = fast_atof(token);  break;
+            case 43: q[row].fwd_pct = fast_atof(token);  break;
+            case 44: q[row].log_money_fwd_pct = fast_atof(token);  break;
             default: break;
             }
-            field++;
-            token = strtok(NULL, ";");
+            ++field;
+            token = strtok(nullptr, ";");
         }
-
-        rowCounter++;
+        ++row;
     }
     rewind(file);
 }
