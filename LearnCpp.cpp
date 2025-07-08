@@ -7,6 +7,12 @@
 #include <string>
 #include <stdint.h>
 #include <time.h>
+#include <vector>
+#include <map>
+#include <utility> // for std::pair
+#include <algorithm>
+#include <windows.h>
+
 
 struct OptionChainQuote {
     int64_t quote_unixtime;
@@ -54,6 +60,17 @@ struct OptionChainQuote {
     double log_moneyness;
     double fwd_pct;
     double log_money_fwd_pct;
+};
+struct LinearRegressionStats {
+    double intercept;
+    double slope;
+    double r_squared;
+    double mse;   // Mean Squared Error
+    double rmse;  // Root Mean Squared Error
+};
+struct ForwardRegressionResult {
+    std::vector<int64_t> expiries;
+    std::vector<LinearRegressionStats> regressions;
 };
 
 const char* field_names[] = {
@@ -226,16 +243,88 @@ void print_option_chain_quote(struct OptionChainQuote* quotes, int rowsToPrint) 
     }
 }
 
+LinearRegressionStats linear_regression(const std::vector<double>& x, const std::vector<double>& y) {
+    int n = x.size();
+    LinearRegressionStats stats = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+    if (n == 0) return stats;
+
+    double sum_x = 0, sum_y = 0, sum_xy = 0, sum_x2 = 0;
+    for (int i = 0; i < n; ++i) {
+        sum_x += x[i];
+        sum_y += y[i];
+        sum_xy += x[i] * y[i];
+        sum_x2 += x[i] * x[i];
+    }
+
+    double mean_x = sum_x / n;
+    double mean_y = sum_y / n;
+    double denominator = sum_x2 - n * mean_x * mean_x;
+
+    if (denominator == 0.0) {
+        stats.intercept = mean_y;
+        return stats;
+    }
+
+    stats.slope = (sum_xy - n * mean_x * mean_y) / denominator;
+    stats.intercept = mean_y - stats.slope * mean_x;
+
+    // Calcul des résidus et R²
+    double ss_total = 0.0, ss_residual = 0.0;
+    for (int i = 0; i < n; ++i) {
+        double y_hat = stats.intercept + stats.slope * x[i];
+        double error = y[i] - y_hat;
+        ss_residual += error * error;
+        ss_total += (y[i] - mean_y) * (y[i] - mean_y);
+    }
+
+    stats.mse = ss_residual / n;
+    stats.rmse = sqrt(stats.mse);
+    stats.r_squared = (ss_total == 0.0) ? 0.0 : 1.0 - (ss_residual / ss_total);
+
+    return stats;
+}
+
+
+ForwardRegressionResult compute_forward_regressions(const OptionChainQuote* quotes, int n) {
+    std::map<int64_t, std::vector<const OptionChainQuote*>> grouped;
+    ForwardRegressionResult result;
+
+    for (int i = 0; i < n; ++i) {
+        if (quotes[i].c_mid > 0 && quotes[i].p_mid > 0) {
+            grouped[quotes[i].expire_unixtime].push_back(&quotes[i]);
+        }
+    }
+
+    for (auto it = grouped.begin(); it != grouped.end(); ++it) {
+        int64_t expiry = it->first;
+        const std::vector<const OptionChainQuote*>& rows = it->second;
+
+        std::vector<double> x, y;
+        for (const auto* quote : rows) {
+            x.push_back(quote->strike);
+            y.push_back(quote->c_mid - quote->p_mid);
+        }
+
+        LinearRegressionStats stats = linear_regression(x, y);
+        result.expiries.push_back(expiry);
+        result.regressions.push_back(stats);
+    }
+
+    return result;
+}
+
+
+
 int main()
 {
+    SetConsoleOutputCP(CP_UTF8);
     std::string path = "C:\\Users\\paula\\source\\repos\\LearnCpp\\raw_data.csv";
-
     clock_t start = clock();
     FILE* file = fopen(path.c_str(), "r");
     int rowsCount = get_csv_rows_count(file);
     std::cout << "Rows count: " << rowsCount << "\n";
 
-    int numberOfImports = 1000;
+    int numberOfImports = 1;
     struct OptionChainQuote* quotes = new struct OptionChainQuote[rowsCount];
 
     for (int i = 0; i <= numberOfImports; i++) {
@@ -244,17 +333,32 @@ int main()
             printf("Importing file #%d\n", i + 1);
         }
     }
+    
 
-    clock_t end = clock();
-    double elapsed_seconds = (double)(end - start) / CLOCKS_PER_SEC;
 
     printf("Memory allocated for %d OptionChainQuote structures.\n", rowsCount);
 
-    // Afficher les 3 premières lignes
-    //print_option_chain_quote(quotes, 746);
 
-    printf("Execution time: %.6f seconds\n", elapsed_seconds);
 	fclose(file);
+    ForwardRegressionResult regressionResult = compute_forward_regressions(quotes, rowsCount);
+
+    // En-tête du tableau
+    printf("%-15s | %-12s | %-10s | %-10s | %-10s\n",
+        "Expiry", "Intercept", "Slope", "R^2", "RMSE");
+    printf("---------------------------------------------------------------\n");
+
+    // Affichage ligne par ligne
+    for (size_t i = 0; i < regressionResult.expiries.size(); ++i) {
+        int64_t expiry = regressionResult.expiries[i];
+        struct LinearRegressionStats stats = regressionResult.regressions[i];
+
+        printf("%-15lld | %-12.2f | %-10.6f | %-10.6f | %-10.6f\n",
+            expiry, stats.intercept, stats.slope, stats.r_squared, stats.rmse);
+    }
+
+    clock_t end = clock();
+    double elapsed_seconds = (double)(end - start) / CLOCKS_PER_SEC;
+	printf("Total execution time: %.6f seconds\n", elapsed_seconds);
 	delete[] quotes;
     std::cin.get();
     return 0;
