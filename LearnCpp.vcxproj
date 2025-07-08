@@ -102,7 +102,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <AdditionalIncludeDirectories>$(VcpkgRoot)installed\x64-windows\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -117,7 +118,8 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp23</LanguageStandard>
+      <AdditionalIncludeDirectories>$(VcpkgRoot)installed\x64-windows\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -127,12 +129,14 @@
   <ItemGroup>
     <ClCompile Include="black_pricer.cpp" />
     <ClCompile Include="black_pricer.h" />
+    <ClCompile Include="csv_loader.cpp" />
     <ClCompile Include="greeks_engine.cpp" />
     <ClCompile Include="LearnCpp.cpp" />
     <ClCompile Include="option_data.cpp" />
     <ClCompile Include="regression.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="csv_loader.h" />
     <ClInclude Include="greeks_engine.h" />
     <ClInclude Include="regression.h" />
     <ClInclude Include="option_data.h" />

@@ -33,6 +33,9 @@
     <ClCompile Include="greeks_engine.cpp">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="csv_loader.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="option_data.h">
@@ -42,6 +45,9 @@
       <Filter>Fichiers sources</Filter>
     </ClInclude>
     <ClInclude Include="greeks_engine.h">
+      <Filter>Fichiers sources</Filter>
+    </ClInclude>
+    <ClInclude Include="csv_loader.h">
       <Filter>Fichiers sources</Filter>
     </ClInclude>
   </ItemGroup>
