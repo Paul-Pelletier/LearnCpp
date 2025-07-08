@@ -125,11 +125,13 @@
   <ItemGroup>
     <ClCompile Include="black_pricer.cpp" />
     <ClCompile Include="black_pricer.h" />
+    <ClCompile Include="greeks_engine.cpp" />
     <ClCompile Include="LearnCpp.cpp" />
     <ClCompile Include="option_data.cpp" />
     <ClCompile Include="regression.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="greeks_engine.h" />
     <ClInclude Include="regression.h" />
     <ClInclude Include="option_data.h" />
   </ItemGroup>
