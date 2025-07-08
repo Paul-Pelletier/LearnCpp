@@ -2,7 +2,7 @@
 #include <math.h>
 
 #define PI 3.14159265358979323846
-#define EPSILON (1.0/365)  // 1 jour en années
+#define EPSILON (0.01)  // 1 jour en années
 
 static double norm_cdf(double x) {
     return 0.5 * erfc(-x / sqrt(2.0));
